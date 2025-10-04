@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Presentación de Archivos</title>
+  <style>
+    :root{font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;}
+    body{margin:0;padding:24px;background:#f6f8fb;color:#111}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+    h1{font-size:20px;margin:0}
+    .controls{display:flex;gap:8px;align-items:center}
+    input[type=file]{display:none}
+    .btn{background:#2b6cb0;color:white;padding:8px 12px;border-radius:8px;cursor:pointer;border:0}
+    .btn.ghost{background:transparent;color:#2b6cb0;border:1px solid #dbeafe}
+    main{display:grid;grid-template-columns:1fr 380px;gap:18px}
+    .panel{background:white;border-radius:12px;padding:12px;box-shadow:0 6px 18px rgba(2,6,23,0.06)}
+    .file-list{display:flex;flex-direction:column;gap:8px}
+    .file-item{display:flex;gap:12px;align-items:center;padding:8px;border-radius:8px;border:1px solid #eef2ff}
+    .file-thumb{width:56px;height:56px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:#eef2ff;overflow:hidden}
+    .file-thumb img{max-width:100%;max-height:100%;object-fit:cover}
+    .file-meta{flex:1}
+    .file-name{font-weight:600}
+    .file-sub{font-size:12px;color:#6b7280}
+    .file-actions{display:flex;flex-direction:column;gap:6px}
+    .small{font-size:12px;padding:6px 8px;border-radius:8px;border:0;cursor:pointer}
+    .preview{min-height:120px}
+    .preview img{max-width:100%;max-height:60vh}
+    .empty{color:#6b7280;text-align:center;padding:24px}
+    .search{padding:8px;border-radius:8px;border:1px solid #e6eef8;width:220px}
+    footer{margin-top:18px;font-size:13px;color:#374151}
+    @media (max-width:900px){main{grid-template-columns:1fr;}
+      .preview{order:2}
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Presentación de Archivos · Sitio de Marketing</h1>
+    <div class="controls">
+      <input id="fileInput" type="file" multiple />
+      <label for="fileInput" class="btn" title="Subir archivos">Subir archivos</label>
+      <input id="search" class="search" placeholder="Buscar por nombre..." />
+      <button id="clear" class="btn ghost">Limpiar</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="panel">
+      <div id="list" class="file-list">
+        <div class="empty">No hay archivos. Usa "Subir archivos" para añadirlos o arrastra archivos sobre la ventana.</div>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <h3>Previsualización</h3>
+      <div id="preview" class="preview empty">Selecciona un archivo para ver su previsualización aquí.</div>
+
+      <hr style="margin:12px 0;border:none;border-top:1px solid #f1f5f9">
+      <h4>Info rápida</h4>
+      <ul id="info" style="padding-left:16px;margin:8px 0;color:#374151"></ul>
+      <div style="margin-top:12px;display:flex;gap:8px;">
+        <button id="downloadAll" class="btn small">Descargar todo (.zip)</button>
+        <button id="removeAll" class="btn ghost small">Eliminar todo</button>
+      </div>
+    </aside>
+  </main>
+
+  <footer>
+    Consejo: esta demo funciona localmente. Para un sitio de producción, conecta la subida de archivos a un servidor o servicio de almacenamiento (S3, Cloud Storage) y aplica autenticación.
+  </footer>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const listEl = document.getElementById('list');
+    const previewEl = document.getElementById('preview');
+    const infoEl = document.getElementById('info');
+    const searchEl = document.getElementById('search');
+    const clearBtn = document.getElementById('clear');
+    const removeAll = document.getElementById('removeAll');
+    const downloadAll = document.getElementById('downloadAll');
+
+    let files = []; // {file, id}
+
+    function fmtBytes(bytes){
+      if(bytes===0) return '0 B';
+      const k=1024; const sizes=['B','KB','MB','GB'];
+      const i=Math.floor(Math.log(bytes)/Math.log(k));
+      return parseFloat((bytes/Math.pow(k,i)).toFixed(2))+' '+sizes[i];
+    }
+
+    function renderList(filter=''){
+      listEl.innerHTML = '';
+      const filtered = files.filter(f=>f.file.name.toLowerCase().includes(filter.toLowerCase()));
+      if(filtered.length===0){
+        listEl.innerHTML = '<div class="empty">No hay archivos que mostrar.</div>';
+        previewEl.classList.add('empty');
+        previewEl.innerHTML = 'Selecciona un archivo para ver su previsualización aquí.';
+        infoEl.innerHTML = '';
+        return;
+      }
+      filtered.forEach(item=>{
+        const div = document.createElement('div'); div.className='file-item';
+        const thumb = document.createElement('div'); thumb.className='file-thumb';
+        const meta = document.createElement('div'); meta.className='file-meta';
+        const actions = document.createElement('div'); actions.className='file-actions';
+
+        // thumbnail
+        if(item.file.type.startsWith('image/')){
+          const img = document.createElement('img');
+          img.src = URL.createObjectURL(item.file);
+          thumb.appendChild(img);
+        } else {
+          thumb.innerHTML = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M7 2H14L20 8V22H7V2Z" stroke="#2563eb" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+        }
+
+        meta.innerHTML = `<div class="file-name">${item.file.name}</div><div class="file-sub">${fmtBytes(item.file.size)} • ${new Date(item.file.lastModified).toLocaleString()}</div>`;
+
+        const btnView = document.createElement('button'); btnView.className='small'; btnView.textContent='Ver';
+        btnView.onclick = ()=> showPreview(item.file);
+        const btnDownload = document.createElement('button'); btnDownload.className='small'; btnDownload.textContent='Descargar';
+        btnDownload.onclick = ()=> downloadFile(item.file);
+        const btnRemove = document.createElement('button'); btnRemove.className='small'; btnRemove.textContent='Eliminar';
+        btnRemove.onclick = ()=>{ files = files.filter(f=>f.id!==item.id); renderList(searchEl.value); };
+
+        actions.appendChild(btnView); actions.appendChild(btnDownload); actions.appendChild(btnRemove);
+
+        div.appendChild(thumb); div.appendChild(meta); div.appendChild(actions);
+        listEl.appendChild(div);
+      });
+
+      // update quick info
+      infoEl.innerHTML = `<li>Archivos: ${filtered.length}</li><li>Tamaño total: ${fmtBytes(filtered.reduce((s,f)=>s+f.file.size,0))}</li>`;
+    }
+
+    function showPreview(file){
+      previewEl.classList.remove('empty');
+      if(file.type.startsWith('image/')){
+        previewEl.innerHTML = '';
+        const img = document.createElement('img'); img.src = URL.createObjectURL(file);
+        previewEl.appendChild(img);
+      } else if(file.type.startsWith('text/') || file.name.endsWith('.html') || file.name.endsWith('.css') || file.name.endsWith('.js')){
+        const reader = new FileReader();
+        reader.onload = e=>{
+          const pre = document.createElement('pre'); pre.style.whiteSpace='pre-wrap'; pre.style.maxHeight='60vh'; pre.style.overflow='auto'; pre.textContent = e.target.result;
+          previewEl.innerHTML = ''; previewEl.appendChild(pre);
+        };
+        reader.readAsText(file);
+      } else {
+        previewEl.innerHTML = `<div style="padding:12px">No hay previsualización disponible para <strong>${file.name}</strong>.</div>`;
+      }
+    }
+
+    function downloadFile(file){
+      const url = URL.createObjectURL(file);
+      const a = document.createElement('a'); a.href = url; a.download = file.name; document.body.appendChild(a); a.click(); a.remove();
+    }
+
+    fileInput.addEventListener('change', (e)=>{
+      const selected = Array.from(e.target.files);
+      selected.forEach(f=> files.push({file:f,id:crypto.randomUUID()}));
+      renderList(searchEl.value);
+      fileInput.value = '';
+    });
+
+    // drag & drop
+    ['dragenter','dragover'].forEach(ev=>{
+      window.addEventListener(ev,e=>{e.preventDefault(); e.dataTransfer && (e.dataTransfer.dropEffect='copy');});
+    });
+    window.addEventListener('drop', e=>{
+      e.preventDefault(); if(e.dataTransfer && e.dataTransfer.files.length){
+        const dropped = Array.from(e.dataTransfer.files);
+        dropped.forEach(f=> files.push({file:f,id:crypto.randomUUID()}));
+        renderList(searchEl.value);
+      }
+    });
+
+    searchEl.addEventListener('input', ()=> renderList(searchEl.value));
+    clearBtn.addEventListener('click', ()=>{ files=[]; renderList(); });
+    removeAll.addEventListener('click', ()=>{ if(confirm('¿Eliminar todos los archivos de la lista?')){ files=[]; renderList(); } });
+
+    downloadAll.addEventListener('click', async ()=>{
+      if(files.length===0){ alert('No hay archivos para descargar'); return; }
+      // crear zip simple usando JSZip si está disponible; si no, descargar individuales
+      if(window.JSZip){
+        const zip = new JSZip();
+        files.forEach(f=> zip.file(f.file.name, f.file));
+        const content = await zip.generateAsync({type:'blob'});
+        const a = document.createElement('a'); a.href=URL.createObjectURL(content); a.download='archivos.zip'; a.click(); a.remove();
+      } else {
+        if(confirm('JSZip no está cargado. ¿Descargar archivos individualmente en su lugar?')){
+          files.forEach(f=> downloadFile(f.file));
+        }
+      }
+    });
+
+    // carga de ejemplo (opcional)
+    function seedExample(){
+      // no podemos crear archivos reales sin input, así que dejamos la lista vacía.
+    }
+    seedExample();
+
+  </script>
+</body>
+</html>
